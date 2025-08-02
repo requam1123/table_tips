@@ -1,9 +1,26 @@
-# 忽略 tips.json 文件
+# ------------------
+# Data & Log Files
+# ------------------
 tips.json
+*.log
 
-# 忽略 Python 缓存文件
+# ------------------
+# Python Specific
+# ------------------
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# 忽略mac定位文件
+# Optional: Virtual Environment folder
+# venv/
+# .venv/
+
+# ------------------
+# OS Specific
+# ------------------
+# macOS
 .DS_Store
+
+# Windows
+# Thumbs.db
