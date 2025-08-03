@@ -3,7 +3,7 @@ from ttkbootstrap.constants import *
 import json
 import datetime
 from PIL import Image, ImageTk
-from dialogs import CreateTipDialog
+from dialogs import CreateTipDialog,TranslationServiceDialog
 from tkinter import messagebox
 
 # 稍后我们会在这里导入你的其他模块，比如 dialogs.py
@@ -20,7 +20,7 @@ class TipApp:
         self.BACKGROUND_IMG = "src/background.jpg"
 
         # --- 2. 配置主窗口 ---
-        self.root.title("桌面标签应用 (类版本)")
+        self.root.title("桌面标签应用")
         self.root.geometry("800x600+200+200")
         
         # 设置窗口图标
@@ -31,15 +31,11 @@ class TipApp:
         except FileNotFoundError:
             print(f"警告: 图标文件未找到 {self.BACKGROUND_IMG}")
 
-        # --- 3. 创建UI界面 ---
         self.setup_ui()
-        
-        # --- 4. 创建菜单 (目前是占位) ---
+
         self.create_menu()
 
         self.update_status()
-        
-
 
         self.load_tips()
 
@@ -57,12 +53,26 @@ class TipApp:
         status_bar.place(relx=0, rely=0, relwidth=1.0, height=50)
         self.root.bind("<Configure>",self.update_status)
 
-        """left part"""
-        public_container = ttk.Frame(main_frame, bootstyle="secondary")
+        #-----------------#  LEFT PART  #----------------#
+        public_container = ttk.Frame(main_frame)
         public_container.place(relx=0, rely=0.1, relwidth=0.5, relheight=0.8)
+
+        # public tip counts label (base on container)
+        self.public_label_counts = ttk.Label(public_container, 
+                                        text="共享tip", 
+                                        anchor="w", 
+                                        padding=5, 
+                                        bootstyle="info"
+        )
+        self.public_label_counts.pack(fill=X, padx=5, pady=2)
+
+        # public tip canvas and scrollbar (base on container)
 
         public_canvas = ttk.Canvas(public_container)
         public_scrollbar = ttk.Scrollbar(public_container, orient=VERTICAL, command=public_canvas.yview)
+        public_scrollbar.pack(side=RIGHT, fill=Y)
+
+        # public tip frame and Configure (base on canvas)
         self.inside_public_frame = ttk.Frame(public_canvas)
 
         self.inside_public_frame.bind(
@@ -74,25 +84,31 @@ class TipApp:
             "<Configure>",
             lambda e: public_canvas.itemconfig("public_window", width=e.width)
         )
-
         public_canvas.create_window((0, 0), window=self.inside_public_frame, anchor="nw", tags="public_window")
         public_canvas.configure(yscrollcommand=public_scrollbar.set)
-
         public_canvas.pack(side=LEFT, fill=BOTH, expand=True)
-        public_scrollbar.pack(side=RIGHT, fill=Y)
 
-        self.public_label_counts = ttk.Label(self.inside_public_frame, 
-                                        text="共享tip", 
+        # bind mouth events
+        public_canvas.bind("<MouseWheel>", lambda event, c=public_canvas: self._on_mousewheel(event, c))
+        self.inside_public_frame.bind("<MouseWheel>", lambda event, c=public_canvas: self._on_mousewheel(event, c))
+        # 兼容Linux
+        public_canvas.bind("<Button-4>", lambda event, c=public_canvas: self._on_mousewheel(event, c))
+        public_canvas.bind("<Button-5>", lambda event, c=public_canvas: self._on_mousewheel(event, c))
+
+
+        #-----------------#  RIGHT PART  #----------------#
+        private_container = ttk.Frame(main_frame)
+        private_container.place(relx=0.5, rely=0.1, relwidth=0.5, relheight=0.8)
+        
+        self.private_label_counts = ttk.Label(private_container, 
+                                        text="私人tip", 
                                         anchor="w", 
                                         padding=5, 
-                                        bootstyle="info"
-        )
-        self.public_label_counts.pack(fill=X, padx=5, pady=2)
+                                        bootstyle="warning"
+                                        )
 
+        self.private_label_counts.pack(fill=X, padx=5, pady=2)
 
-        """the right part"""
-        private_container = ttk.Frame(main_frame, bootstyle="info")
-        private_container.place(relx=0.5, rely=0.1, relwidth=0.5, relheight=0.8)
 
         private_canvas = ttk.Canvas(private_container)
         private_scrollbar = ttk.Scrollbar(private_container, orient=VERTICAL, command=private_canvas.yview)
@@ -110,20 +126,23 @@ class TipApp:
 
         private_canvas.create_window((0, 0), window=self.inside_private_frame, anchor="nw", tags="private_window")
         private_canvas.configure(yscrollcommand=private_scrollbar.set)
-
-        private_canvas.pack(side=LEFT, fill=BOTH, expand=True)
+        
         private_scrollbar.pack(side=RIGHT, fill=Y)
+        private_canvas.pack(side=LEFT, fill=BOTH, expand=True)
 
-        self.private_label_counts = ttk.Label(self.inside_private_frame, 
-                                        text="私人tip", 
-                                        anchor="w", 
-                                        padding=5, 
-                                        bootstyle="warning"
-                                        )
+        private_canvas.bind("<MouseWheel>", lambda event, c=private_canvas: self._on_mousewheel(event, c))
+        self.inside_private_frame.bind("<MouseWheel>", lambda event, c=private_canvas: self._on_mousewheel(event, c))
+        # 兼容Linux
+        private_canvas.bind("<Button-4>", lambda event, c=private_canvas: self._on_mousewheel(event, c))
+        private_canvas.bind("<Button-5>", lambda event, c=private_canvas: self._on_mousewheel(event, c))
+    
 
-        self.private_label_counts.pack(fill=X, padx=5, pady=2)
-
-
+    def _on_mousewheel(self, event, canvas: ttk.Canvas):
+        """处理鼠标滚轮事件，滚动指定的Canvas。"""
+        if event.num == 5 or event.delta == -120:  # 向下滚动
+            canvas.yview_scroll(1, "units")
+        if event.num == 4 or event.delta == 120:  # 向上滚动
+            canvas.yview_scroll(-1, "units")
 
     def update_status(self,event=None):
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -141,10 +160,15 @@ class TipApp:
         """负责创建顶部的菜单栏。"""
         
         menubar = ttk.Menu(self.root)
+        
         file_menu = ttk.Menu(menubar,tearoff=0)
         file_menu.add_command(label="新建",command=self.create_new_tip)
-
         menubar.add_cascade(label="文件", menu=file_menu)
+        
+        tools_menu = ttk.Menu(menubar, tearoff=0)
+        tools_menu.add_command(label="翻译工具", command=self.open_translation_tool)
+        menubar.add_cascade(label="工具", menu=tools_menu)
+
         self.root.config(menu=menubar)
 
     def create_new_tip(self):
@@ -176,7 +200,10 @@ class TipApp:
         )
         label.pack(fill=X, padx=5, pady=2)
         self._bind_right_click(label, new_tip)
-
+        canvas_to_scroll = self.inside_private_frame.master if group == "私人" else self.inside_public_frame.master
+        label.bind("<MouseWheel>", lambda event, c=canvas_to_scroll: self._on_mousewheel(event, c))
+        label.bind("<Button-4>", lambda event, c=canvas_to_scroll: self._on_mousewheel(event, c))
+        label.bind("<Button-5>", lambda event, c=canvas_to_scroll: self._on_mousewheel(event, c))
 
     def save_tips(self):
         try:
@@ -206,7 +233,6 @@ class TipApp:
         except (FileNotFoundError, json.JSONDecodeError):
             self.all_tips = []
     
-
     def _bind_right_click(self, label: ttk.Label, tip_data: dict):
         """为标签绑定右键删除事件"""
         menu = ttk.Menu(self.root, tearoff=0)
@@ -231,15 +257,13 @@ class TipApp:
             self.save_tips()
             self.update_label_counts()
 
-# ==================================
-# 程序主入口
-# ==================================
+    def open_translation_tool(self):
+        TranslationServiceDialog(self.root)
+
+
 if __name__ == "__main__":
-    # 1. 创建主窗口实例
     window = ttk.Window(themename="darkly")
-    
-    # 2. 实例化我们的应用类，并将主窗口传入
+
     app = TipApp(window)
-    
-    # 3. 启动Tkinter的主事件循环
+
     window.mainloop()
